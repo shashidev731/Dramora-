@@ -1,0 +1,9 @@
+{
+  "name":"DRAMORA — Short Drama",
+  "short_name":"DRAMORA",
+  "start_url":"./",
+  "display":"standalone",
+  "background_color":"#07080c",
+  "theme_color":"#07080c",
+  "description":"Vertical short-drama streaming MVP"
+}
