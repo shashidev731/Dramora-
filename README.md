@@ -23,3 +23,15 @@ Open this folder in Android Studio with JDK 17 and Android SDK 35 installed. Let
 5. Create and securely store a release signing key.
 6. Build a signed release APK.
 7. Test the exact signed APK on multiple Android devices.
+
+## v1.1 changes
+- Android 15 edge-to-edge fix (content no longer sits under the status bar); keyboard-safe login.
+- App no longer jumps back to Home on background token refreshes; safer genre buttons.
+- "Forgot password" in the app + `reset.html` page (host with GitHub Pages).
+- New standalone admin (`admin/index.html`): own sign-in, edit/delete series and episodes, publish confirmations, upload size limits, escaped output, visible errors.
+- Supabase library pinned to an exact version.
+
+## One-time Supabase setup (dashboard)
+1. Authentication > Emails > SMTP Settings: add a custom SMTP provider (built-in email is heavily rate limited).
+2. Authentication > URL Configuration > Redirect URLs: add `https://shashidev731.github.io/Dramora-/**`.
+3. Run the policy audit query (see chat) and confirm only admins can write to series/episodes/storage and drafts are not readable by anon.

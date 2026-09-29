@@ -1,13 +1,163 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DRAMORA Admin</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><style>*{box-sizing:border-box}body{margin:0;background:#08090d;color:#f5f5f5;font-family:system-ui,-apple-system,sans-serif}.wrap{max-width:1050px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px}.brand{font-weight:900;letter-spacing:3px;font-size:22px}.muted{color:#9297a3;font-size:13px}.card{background:#11131a;border:1px solid #252a34;border-radius:16px;padding:18px;margin:16px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}input,textarea,select{width:100%;background:#080a0f;border:1px solid #2b303b;color:#fff;border-radius:10px;padding:12px;margin-top:6px}label{display:block;font-size:12px;color:#aeb3bd;margin-top:10px}button{border:0;border-radius:10px;padding:11px 15px;font-weight:800;cursor:pointer}.primary{background:#fff;color:#07080c}.secondary{background:#20242e;color:#fff}.danger{background:#4b1e26;color:#fff}.row{display:flex;gap:8px;flex-wrap:wrap}.pill{display:inline-block;padding:5px 8px;border-radius:999px;background:#20242e;font-size:11px}.item{border-top:1px solid #242832;padding:13px 0}.hidden{display:none}.msg{padding:10px;border-radius:9px;background:#171a22;color:#bfc4ce;font-size:12px;margin-top:10px}.ok{color:#7ff0a4}.bad{color:#ff9e9e}</style></head><body><div class="wrap"><div class="top"><div><div class="brand">DRAMORA ADMIN</div><div class="muted">Content management</div></div><button class="secondary" id="logout">Sign out</button></div><div id="gate" class="card">Checking admin access…</div><main id="app" class="hidden"><div class="grid"><section class="card"><h2>Add series</h2><form id="seriesForm"><label>Title<input id="stitle" required></label><label>Slug<input id="sslug" required></label><label>Description<textarea id="sdesc"></textarea></label><label>Genres<input id="sgenre" placeholder="Romance, Drama"></label><label>Language<input id="slang" placeholder="Hindi"></label><label>Total episodes<input id="stotal" type="number" min="0" value="0"></label><label>Poster image<input id="sposter" type="file" accept="image/*"></label><label>Backdrop image<input id="sbackdrop" type="file" accept="image/*"></label><div class="row" style="margin-top:14px"><button class="primary">Create draft series</button></div></form><div id="seriesMsg"></div></section><section class="card"><h2>Add episode</h2><form id="episodeForm"><label>Series<select id="eseries" required></select></label><label>Episode number<input id="enum" type="number" min="1" required></label><label>Title<input id="etitle"></label><label>Description<textarea id="edesc"></textarea></label><label>Duration (seconds)<input id="edur" type="number" min="0"></label><label>Video file<input id="evideo" type="file" accept="video/*"></label><label>Or video URL<input id="eurl" type="url"></label><label>Thumbnail<input id="ethumb" type="file" accept="image/*"></label><button class="primary" style="margin-top:14px">Create draft episode</button></form><div id="episodeMsg"></div></section></div><section class="card"><div class="top"><h2>Catalogue</h2><button class="secondary" id="refresh">Refresh</button></div><div id="catalog"></div></section></main></div><script src="../config.js"></script><script>
-const {createClient}=supabase;const sb=createClient(DRAMORA_CONFIG.SUPABASE_URL,DRAMORA_CONFIG.SUPABASE_KEY);const $=s=>document.querySelector(s);let user=null;
-async function storage(file,bucket){if(!file)return null;const path=`${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const {error}=await sb.storage.from(bucket).upload(path,file,{upsert:false});if(error)throw error;return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl}
-async function check(){const r=await sb.auth.getUser();user=r.data.user;if(!user){$('#gate').innerHTML='<b>Sign in required.</b>';return}const {data,error}=await sb.from('admin_users').select('role').eq('user_id',user.id).maybeSingle();if(error||!data){$('#gate').innerHTML='<b>Admin access required.</b><div class="muted">Signed in as '+user.email+'</div>';return}$('#gate').innerHTML='<span class="ok">Admin verified.</span> '+user.email;$('#app').classList.remove('hidden');loadAll()}
-async function loadAll(){const {data}=await sb.from('series').select('*').order('created_at',{ascending:false});window.series=data||[];$('#eseries').innerHTML=window.series.map(s=>`<option value="${s.id}">${s.title}</option>`).join('');$('#catalog').innerHTML=window.series.map(s=>`<div class="item"><b>${s.title}</b> <span class="pill">${s.status}</span> <span class="pill">${s.total_episodes} eps</span><div class="muted">${s.language||''} · ${(s.genre||[]).join(', ')}</div><div class="row" style="margin-top:8px"><button class="secondary" onclick="togglePublish('${s.id}','${s.status}')">${s.status==='published'?'Unpublish':'Publish'}</button><button class="danger" onclick="archive('${s.id}')">Archive</button><button class="secondary" onclick="episodes('${s.id}')">Episodes</button></div><div id="eps-${s.id}"></div></div>`).join('')||'<div class="muted">No series yet.</div>'}
-async function togglePublish(id,status){await sb.from('series').update({status:status==='published'?'draft':'published'}).eq('id',id);loadAll()}
-async function archive(id){await sb.from('series').update({status:'archived'}).eq('id',id);loadAll()}
-async function episodes(id){const box=$('#eps-'+id);const {data}=await sb.from('episodes').select('*').eq('series_id',id).order('episode_number');box.innerHTML=(data||[]).map(e=>`<div class="item"><b>Ep ${e.episode_number}</b> ${e.title||''} <span class="pill">${e.is_published?'published':'draft'}</span><div class="row" style="margin-top:6px"><button class="secondary" onclick="pubEp('${e.id}',${e.is_published})">${e.is_published?'Unpublish':'Publish'}</button></div></div>`).join('')||'<div class="muted">No episodes.</div>'}
-async function pubEp(id,p){await sb.from('episodes').update({is_published:!p}).eq('id',id);loadAll()}
-$('#seriesForm').onsubmit=async e=>{e.preventDefault();try{const poster=await storage($('#sposter').files[0],'dramora-posters');const back=await storage($('#sbackdrop').files[0],'dramora-backdrops');const r=await sb.from('series').insert({slug:$('#sslug').value.trim(),title:$('#stitle').value.trim(),description:$('#sdesc').value.trim(),genre:$('#sgenre').value.split(',').map(x=>x.trim()).filter(Boolean),language:$('#slang').value.trim(),total_episodes:+$('#stotal').value||0,poster_url:poster,backdrop_url:back,status:'draft'});if(r.error)throw r.error;$('#seriesMsg').innerHTML='<span class="ok">Draft series created.</span>';e.target.reset();loadAll()}catch(x){$('#seriesMsg').innerHTML='<span class="bad">'+x.message+'</span>'}}
-$('#episodeForm').onsubmit=async e=>{e.preventDefault();try{let video=$('#eurl').value.trim()||null;if($('#evideo').files[0])video=await storage($('#evideo').files[0],'dramora-videos');const thumb=await storage($('#ethumb').files[0],'dramora-thumbnails');const r=await sb.from('episodes').insert({series_id:$('#eseries').value,episode_number:+$('#enum').value,title:$('#etitle').value.trim(),description:$('#edesc').value.trim(),duration_seconds:+$('#edur').value||0,video_url:video,thumbnail_url:thumb,is_published:false});if(r.error)throw r.error;$('#episodeMsg').innerHTML='<span class="ok">Draft episode created.</span>';e.target.reset();loadAll()}catch(x){$('#episodeMsg').innerHTML='<span class="bad">'+x.message+'</span>'}}
-$('#refresh').onclick=loadAll;$('#logout').onclick=async()=>{await sb.auth.signOut();location.reload()};check();
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DRAMORA Admin</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.81.1/dist/umd/supabase.js"></script><style>*{box-sizing:border-box}body{margin:0;background:#08090d;color:#f5f5f5;font-family:system-ui,-apple-system,sans-serif}.wrap{max-width:1050px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px}.brand{font-weight:900;letter-spacing:3px;font-size:22px}.muted{color:#9297a3;font-size:13px}.card{background:#11131a;border:1px solid #252a34;border-radius:16px;padding:18px;margin:16px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}input,textarea,select{width:100%;background:#080a0f;border:1px solid #2b303b;color:#fff;border-radius:10px;padding:12px;margin-top:6px}label{display:block;font-size:12px;color:#aeb3bd;margin-top:10px}button{border:0;border-radius:10px;padding:11px 15px;font-weight:800;cursor:pointer}.primary{background:#fff;color:#07080c}.secondary{background:#20242e;color:#fff}.danger{background:#4b1e26;color:#fff}.row{display:flex;gap:8px;flex-wrap:wrap}.pill{display:inline-block;padding:5px 8px;border-radius:999px;background:#20242e;font-size:11px}.item{border-top:1px solid #242832;padding:13px 0}.hidden{display:none}.msg{padding:10px;border-radius:9px;background:#171a22;color:#bfc4ce;font-size:12px;margin-top:10px}.ok{color:#7ff0a4}.bad{color:#ff9e9e}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0}.stat{background:#11131a;border:1px solid #252a34;border-radius:14px;padding:14px}.stat b{display:block;font-size:24px}.stat small{color:#9297a3}
+.modal-wrap{position:fixed;inset:0;background:#000b;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:16px;z-index:50}.modal{background:#11131a;border:1px solid #2b303b;border-radius:16px;padding:18px;width:100%;max-width:520px;margin:auto}.modal h2{margin-top:0}
+.toast{position:fixed;left:12px;right:12px;bottom:14px;max-width:520px;margin:auto;padding:12px 14px;border-radius:12px;background:#171a22;border:1px solid #2b303b;font-size:13px;z-index:60;display:none}.toast.show{display:block}.toast.err{border-color:#7a2b35;color:#ffb4b4}
+.sub{margin:10px 0 0 10px;padding-left:10px;border-left:2px solid #252a34}.small{font-size:12px;color:#9297a3;margin-top:4px}
+.text-link{background:none;color:#9bb8ff;padding:6px 0;font-weight:600}
+</style></head><body>
+<div class="wrap">
+<div class="top"><div><div class="brand">DRAMORA ADMIN</div><div class="muted">Content management</div></div><button class="secondary hidden" id="logout">Sign out</button></div>
+<div id="gate" class="card">Checking admin access…</div>
+<main id="app" class="hidden">
+<div class="stats" id="stats"></div>
+<section class="card"><div class="top"><h2 style="margin:0">Catalogue</h2><div class="row"><button class="secondary" data-act="refresh">Refresh</button><button class="primary" data-act="new-series">＋ New series</button></div></div><div id="catalog"></div></section>
+<p class="small">Only publish titles and episodes when the distribution rights and video masters are cleared. Publishing makes them visible to every app user.</p>
+</main>
+</div>
+<div id="modalHost"></div><div class="toast" id="toast"></div>
+<script src="../config.js"></script>
+<script>
+const {createClient}=supabase;
+const sb=createClient(DRAMORA_CONFIG.SUPABASE_URL,DRAMORA_CONFIG.SUPABASE_KEY);
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const RESET_URL=location.origin+location.pathname.replace(/admin\/(index\.html)?$/,'')+'reset.html';
+const LIMITS={'dramora-posters':10,'dramora-backdrops':20,'dramora-thumbnails':10,'dramora-videos':50};
+let S={series:[],episodes:[],open:new Set()};let user=null;
+
+function toast(msg,bad){const t=$('#toast');t.textContent=msg;t.className='toast show'+(bad?' err':'');clearTimeout(toast.t);toast.t=setTimeout(()=>t.className='toast',bad?6000:2600)}
+function modal(html){$('#modalHost').innerHTML='<div class="modal-wrap"><div class="modal">'+html+'</div></div>'}
+function closeModal(){$('#modalHost').innerHTML=''}
+
+/* ---------- auth / gate ---------- */
+function showLogin(msg){
+  $('#logout').classList.add('hidden');$('#app').classList.add('hidden');
+  $('#gate').innerHTML='<b>Sign in to continue</b>'+(msg?'<div class="msg bad">'+esc(msg)+'</div>':'')+
+   '<form id="loginForm"><label>Email<input id="lEmail" type="email" required autocomplete="username"></label><label>Password<input id="lPass" type="password" required autocomplete="current-password"></label><div class="row" style="margin-top:14px"><button class="primary">Sign in</button><button type="button" class="text-link" data-act="forgot">Forgot password?</button></div></form>';
+}
+async function check(){
+  const r=await sb.auth.getUser();user=r.data?.user||null;
+  if(!user){showLogin();return}
+  $('#logout').classList.remove('hidden');
+  const {data,error}=await sb.from('admin_users').select('role').eq('user_id',user.id).maybeSingle();
+  if(error||!data){$('#app').classList.add('hidden');$('#gate').innerHTML='<b>Admin access required.</b><div class="muted">Signed in as '+esc(user.email)+'. This account is not listed in admin_users.</div>';return}
+  $('#gate').innerHTML='<span class="ok">Admin verified.</span> '+esc(user.email);
+  $('#app').classList.remove('hidden');await loadAll();
+}
+document.addEventListener('submit',async e=>{
+  e.preventDefault();const f=e.target;
+  if(f.id==='loginForm'){
+    const {error}=await sb.auth.signInWithPassword({email:$('#lEmail').value.trim(),password:$('#lPass').value});
+    if(error){showLogin(error.message);return}await check();return}
+  if(f.dataset.form==='series')return saveSeries(f);
+  if(f.dataset.form==='episode')return saveEpisode(f);
+});
+$('#logout').onclick=async()=>{await sb.auth.signOut();location.reload()};
+
+/* ---------- data ---------- */
+async function loadAll(){
+  const [a,b]=await Promise.all([sb.from('series').select('*').order('created_at',{ascending:false}),sb.from('episodes').select('*').order('episode_number')]);
+  if(a.error||b.error){toast((a.error||b.error).message,true)}
+  S.series=a.data||[];S.episodes=b.data||[];render();
+}
+function render(){
+  const pub=S.series.filter(s=>s.status==='published').length,dr=S.series.filter(s=>s.status==='draft').length;
+  const live=S.episodes.filter(e=>e.is_published).length,novid=S.episodes.filter(e=>!e.video_url).length;
+  $('#stats').innerHTML=[[S.series.length,'Series'],[pub,'Published'],[dr,'Drafts'],[live,'Live episodes'],[novid,'Episodes without video']].map(x=>'<div class="stat"><b>'+x[0]+'</b><small>'+x[1]+'</small></div>').join('');
+  $('#catalog').innerHTML=S.series.map(seriesCard).join('')||'<div class="muted">No series yet.</div>';
+}
+function seriesCard(s){
+  const eps=S.episodes.filter(e=>e.series_id===s.id),open=S.open.has(s.id),id=esc(s.id);
+  return '<div class="item"><b>'+esc(s.title)+'</b> <span class="pill">'+esc(s.status)+'</span>'+(s.is_featured?' <span class="pill">featured</span>':'')+' <span class="pill">'+eps.length+'/'+(s.total_episodes||0)+' eps</span>'+
+   '<div class="muted">'+esc(s.slug)+' · '+esc(s.language||'')+' · '+esc((s.genre||[]).join(', '))+'</div>'+
+   '<div class="row" style="margin-top:8px"><button class="secondary" data-act="edit-series" data-id="'+id+'">Edit</button><button class="secondary" data-act="toggle-series" data-id="'+id+'">'+(s.status==='published'?'Unpublish':'Publish')+'</button><button class="secondary" data-act="toggle-eps" data-id="'+id+'">Episodes ('+eps.length+') '+(open?'▲':'▼')+'</button></div>'+
+   (open?episodesBlock(s,eps):'')+'</div>';
+}
+function episodesBlock(s,eps){
+  return '<div class="sub">'+(eps.map(e=>'<div class="item"><b>Ep '+e.episode_number+'</b> '+esc(e.title||'')+' <span class="pill">'+(e.is_published?'published':'draft')+'</span>'+(e.video_url?'':' <span class="pill">no video</span>')+
+   '<div class="row" style="margin-top:6px"><button class="secondary" data-act="edit-ep" data-id="'+esc(e.id)+'">Edit</button><button class="secondary" data-act="toggle-ep" data-id="'+esc(e.id)+'">'+(e.is_published?'Unpublish':'Publish')+'</button></div></div>').join('')||'<div class="muted">No episodes yet.</div>')+
+   '<div class="row" style="margin-top:10px"><button class="primary" data-act="new-ep" data-id="'+esc(s.id)+'">＋ Add episode</button></div></div>';
+}
+
+/* ---------- clicks ---------- */
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act,id=b.dataset.id;
+  if(act==='refresh')return loadAll();
+  if(act==='close')return closeModal();
+  if(act==='new-series')return seriesForm({});
+  if(act==='edit-series')return seriesForm(S.series.find(x=>x.id===id)||{});
+  if(act==='toggle-eps'){S.open.has(id)?S.open.delete(id):S.open.add(id);return render()}
+  if(act==='toggle-series'){const s=S.series.find(x=>x.id===id);if(!s)return;const to=s.status==='published'?'draft':'published';
+    if(to==='published'&&!confirm('Publish "'+s.title+'"? It becomes visible to all app users. Only do this if you hold the distribution rights.'))return;
+    return run(sb.from('series').update({status:to}).eq('id',id),'Series '+to)}
+  if(act==='new-ep')return episodeForm({series_id:id,episode_number:S.episodes.filter(x=>x.series_id===id).length+1});
+  if(act==='edit-ep')return episodeForm(S.episodes.find(x=>x.id===id)||{});
+  if(act==='toggle-ep'){const x=S.episodes.find(y=>y.id===id);if(!x)return;
+    if(!x.is_published&&!x.video_url){toast('Add a video first.',true);return}
+    return run(sb.from('episodes').update({is_published:!x.is_published}).eq('id',id),x.is_published?'Episode unpublished':'Episode published')}
+  if(act==='del-series'){if(!confirm('Delete this series and its episodes? This cannot be undone.'))return;
+    await run(sb.from('series').delete().eq('id',id),'Series deleted');closeModal();return}
+  if(act==='del-ep'){if(!confirm('Delete this episode? This cannot be undone.'))return;
+    await run(sb.from('episodes').delete().eq('id',id),'Episode deleted');closeModal();return}
+  if(act==='forgot'){const em=$('#lEmail').value.trim();if(!em){toast('Type your email first.',true);return}
+    const {error}=await sb.auth.resetPasswordForEmail(em,{redirectTo:RESET_URL});toast(error?error.message:'If that email has an account, a reset link is on its way.',!!error)}
+});
+async function run(q,okMsg){const {error}=await q;if(error){toast(error.message,true);return false}toast(okMsg);await loadAll();return true}
+
+/* ---------- uploads ---------- */
+document.addEventListener('change',async e=>{
+  const inp=e.target;if(inp.type!=='file'||!inp.dataset.bucket)return;const file=inp.files[0];if(!file)return;
+  const bucket=inp.dataset.bucket,max=LIMITS[bucket]||10;
+  if(file.size>max*1024*1024){toast('File too large. Maximum '+max+' MB here. For bigger videos, paste a video URL instead.',true);inp.value='';return}
+  const ext=(file.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const path=crypto.randomUUID()+'.'+ext;inp.disabled=true;toast('Uploading '+file.name+'…');
+  try{const {error}=await sb.storage.from(bucket).upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type||undefined});if(error)throw error;
+    inp.closest('form').querySelector('[name="'+inp.dataset.target+'"]').value=sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;toast('Uploaded')}
+  catch(x){toast(x.message||'Upload failed',true)}finally{inp.disabled=false}
+});
+
+/* ---------- series form ---------- */
+function seriesForm(s){
+  const sel=(v,o)=>'<option'+(v===o?' selected':'')+'>'+o+'</option>';
+  modal('<h2>'+(s.id?'Edit series':'New series')+'</h2><form data-form="series" data-id="'+esc(s.id||'')+'">'+
+   '<label>Title<input name="title" required value="'+esc(s.title||'')+'"></label><label>Slug<input name="slug" required value="'+esc(s.slug||'')+'" placeholder="my-drama-title"></label>'+
+   '<label>Description<textarea name="description">'+esc(s.description||'')+'</textarea></label>'+
+   '<label>Genres<input name="genre" value="'+esc((s.genre||[]).join(', '))+'" placeholder="Romance, Drama"></label><label>Language<input name="language" value="'+esc(s.language||'')+'"></label>'+
+   '<label>Total episodes<input name="total_episodes" type="number" min="0" value="'+(s.total_episodes||0)+'"></label>'+
+   '<label>Status<select name="status">'+['draft','published','archived'].map(o=>sel(s.status||'draft',o)).join('')+'</select></label>'+
+   '<label>Featured<select name="is_featured"><option value="false"'+(s.is_featured?'':' selected')+'>No</option><option value="true"'+(s.is_featured?' selected':'')+'>Yes</option></select></label>'+
+   '<label>Poster URL<input name="poster_url" value="'+esc(s.poster_url||'')+'"></label><input type="file" accept="image/*" data-bucket="dramora-posters" data-target="poster_url"><div class="small">Upload replaces the URL above. Max 10 MB.</div>'+
+   '<label>Backdrop URL<input name="backdrop_url" value="'+esc(s.backdrop_url||'')+'"></label><input type="file" accept="image/*" data-bucket="dramora-backdrops" data-target="backdrop_url"><div class="small">Max 20 MB.</div>'+
+   '<div class="row" style="margin-top:16px"><button class="primary">Save</button><button type="button" class="secondary" data-act="close">Cancel</button>'+(s.id?'<button type="button" class="danger" data-act="del-series" data-id="'+esc(s.id)+'">Delete</button>':'')+'</div></form>');
+}
+async function saveSeries(f){
+  const d=new FormData(f),id=f.dataset.id;
+  const p={title:String(d.get('title')).trim(),slug:String(d.get('slug')).trim(),description:String(d.get('description')||'').trim()||null,
+   genre:String(d.get('genre')||'').split(',').map(x=>x.trim()).filter(Boolean),language:String(d.get('language')||'').trim()||null,
+   total_episodes:Math.max(0,parseInt(d.get('total_episodes'))||0),status:d.get('status'),is_featured:d.get('is_featured')==='true',
+   poster_url:String(d.get('poster_url')||'').trim()||null,backdrop_url:String(d.get('backdrop_url')||'').trim()||null};
+  if(p.status==='published'&&!confirm('Publishing makes this series visible to all users. Rights cleared?'))return;
+  const ok=await run(id?sb.from('series').update(p).eq('id',id):sb.from('series').insert(p),id?'Series saved':'Series created');if(ok)closeModal();
+}
+
+/* ---------- episode form ---------- */
+function episodeForm(x){
+  modal('<h2>'+(x.id?'Edit episode':'New episode')+'</h2><form data-form="episode" data-id="'+esc(x.id||'')+'" data-series="'+esc(x.series_id||'')+'">'+
+   '<label>Episode number<input name="episode_number" type="number" min="1" required value="'+(x.episode_number||1)+'"></label><label>Title<input name="title" value="'+esc(x.title||'')+'"></label>'+
+   '<label>Description<textarea name="description">'+esc(x.description||'')+'</textarea></label><label>Duration (seconds)<input name="duration_seconds" type="number" min="0" value="'+(x.duration_seconds||0)+'"></label>'+
+   '<label>Video URL<input name="video_url" type="url" value="'+esc(x.video_url||'')+'" placeholder="https://…"></label><input type="file" accept="video/*" data-bucket="dramora-videos" data-target="video_url"><div class="small">Upload max 50 MB (free plan limit). For larger files paste a hosted video URL.</div>'+
+   '<label>Thumbnail URL<input name="thumbnail_url" value="'+esc(x.thumbnail_url||'')+'"></label><input type="file" accept="image/*" data-bucket="dramora-thumbnails" data-target="thumbnail_url">'+
+   '<label>Status<select name="is_published"><option value="false"'+(x.is_published?'':' selected')+'>Draft</option><option value="true"'+(x.is_published?' selected':'')+'>Published</option></select></label>'+
+   '<div class="row" style="margin-top:16px"><button class="primary">Save</button><button type="button" class="secondary" data-act="close">Cancel</button>'+(x.id?'<button type="button" class="danger" data-act="del-ep" data-id="'+esc(x.id)+'">Delete</button>':'')+'</div></form>');
+}
+async function saveEpisode(f){
+  const d=new FormData(f),id=f.dataset.id;
+  const p={series_id:f.dataset.series,episode_number:parseInt(d.get('episode_number'))||1,title:String(d.get('title')||'').trim()||null,
+   description:String(d.get('description')||'').trim()||null,duration_seconds:parseInt(d.get('duration_seconds'))||0,
+   video_url:String(d.get('video_url')||'').trim()||null,thumbnail_url:String(d.get('thumbnail_url')||'').trim()||null,is_published:d.get('is_published')==='true'};
+  if(p.is_published&&!p.video_url){toast('Add a video before publishing.',true);return}
+  if(p.is_published&&!confirm('Publish this episode to all users? Rights cleared?'))return;
+  const ok=await run(id?sb.from('episodes').update(p).eq('id',id):sb.from('episodes').insert(p),id?'Episode saved':'Episode created');if(ok)closeModal();
+}
+check();
 </script></body></html>

@@ -18,7 +18,14 @@ public class MainActivity extends Activity {
         w.setStatusBarColor(android.graphics.Color.rgb(7,8,12));
         w.setNavigationBarColor(android.graphics.Color.rgb(7,8,12));
         webView = new WebView(this);
+        webView.setBackgroundColor(android.graphics.Color.rgb(7,8,12));
         setContentView(webView);
+        // Android 15 draws apps edge-to-edge; keep content clear of the status/navigation bars and keyboard.
+        webView.setOnApplyWindowInsetsListener((v, insets) -> {
+            v.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                         insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets;
+        });
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
